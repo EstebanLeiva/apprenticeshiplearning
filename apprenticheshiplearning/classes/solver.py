@@ -8,6 +8,17 @@ class Solver:
         self.c_estimate = c_estimate
         self.mu_expert = mu_expert
 
+    def solve_mdp_forward(self):
+        mu = cp.Variable(len(self.mdp.S) * len(self.mdp.A))
+        objective = cp.Minimize(
+                                self.mdp.c @ mu
+                                )
+        constraints = [mu >= 0,
+                       (self.mdp.T @ mu) == self.mdp.v]
+        problem = cp.Problem(objective, constraints)
+        problem.solve(cp.CLARABEL, verbose=True)
+        return problem, mu
+    
     def solve_irl(self):
         c = cp.Variable((len(self.mdp.S) * len(self.mdp.A)))
         u = cp.Variable(len(self.mdp.S))

@@ -1,6 +1,6 @@
 import numpy as np
 import itertools
-from apprenticheshiplearning.classes.mdp import MdpIRL
+from apprenticheshiplearning.classes.mdp import Mdp, MdpIRL
 
 class GridWorld:
 
@@ -24,9 +24,10 @@ class GridWorld:
         self.c = None
         self.mu_e = None
         self.c_hat = None
-        self.mdp = None
-        
 
+        self.mdp_forward = None
+        self.mdp_IRL = None
+        
     def get_grid_S(self, grid):
         dim = grid.shape
         grid_to_S = np.zeros((dim[0], dim[1]), dtype=int)
@@ -74,11 +75,18 @@ class GridWorld:
                 c_hat[i + len(S_to_grid) * k] = c_estimate(S_to_grid[i], actions[k], goal, obstacles)
         return c_hat
 
-    def get_mdp(self):
+    def get_mdp_forward(self):
+        self.grid_to_S, self.S_to_grid = self.get_grid_S(self.grid)
+        self.P = self.get_P(self.grid_to_S, self.S_to_grid, self.transitions, self.actions, self.goal)
+        self.v = self.get_v(self.S_to_grid, self.init_dist)
+        self.c = self.get_c(self.S_to_grid, self.actions, self.cost, self.goal, self.obstacles)
+        self.mdp_forward = Mdp(self.S_to_grid, self.actions, self.P, self.v, self.c, self.gamma)
+
+    def get_mdp_IRL(self):
         self.grid_to_S, self.S_to_grid = self.get_grid_S(self.grid)
         self.P = self.get_P(self.grid_to_S, self.S_to_grid, self.transitions, self.actions, self.goal)
         self.v = self.get_v(self.S_to_grid, self.init_dist)
         self.c = self.get_c(self.S_to_grid, self.actions, self.cost, self.goal, self.obstacles)
         self.mu_e = self.get_mu_e(self.S_to_grid, self.actions, self.expert_occupancy_measure)
         self.c_hat = self.get_c_estimate(self.S_to_grid, self.c_estimate, self.actions, self.goal, self.obstacles)
-        self.mdp = MdpIRL(self.S_to_grid, self.actions, self.P, self.v, self.gamma, self.mu_e)
+        self.mdp_IRL = MdpIRL(self.S_to_grid, self.actions, self.P, self.v, self.gamma, self.mu_e)

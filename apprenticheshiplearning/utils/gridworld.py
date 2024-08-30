@@ -34,7 +34,7 @@ def plot_occupation(grid):
     plt.show()
 
 def plot_cost_function(grid):
-    cmap = mcolors.ListedColormap(['red', 'green'])
+    cmap = mcolors.ListedColormap(['green', 'red'])
     norm = mcolors.BoundaryNorm(boundaries=[-np.max(np.abs(grid)), 0, np.max(np.abs(grid))], ncolors=2)
     alpha = np.clip(np.abs(grid) / np.max(np.abs(grid)), 0.1, 1)
     plt.matshow(grid, cmap=cmap, norm=norm, alpha=alpha)
