@@ -45,11 +45,10 @@ class GridWorld:
     
     def get_P(self, grid_to_S, S_to_grid, transitions, actions, goal):
         P = np.zeros((len(S_to_grid), len(S_to_grid), len(actions)))
-        pairs = list(itertools.product(S_to_grid, repeat=2))
-        for pair in pairs:
-            for a in range(len(actions)):
-                P[grid_to_S[pair[0][0], pair[0][1]], 
-                  grid_to_S[pair[1][0], pair[1][1]], a] = transitions(pair[0], pair[1], actions[a], goal)
+        for s1 in range(len(S_to_grid)):
+            for s2 in range(len(S_to_grid)):
+                for a in range(len(actions)):
+                    P[s1, s2, a] = transitions(S_to_grid[s1], S_to_grid[s2], actions[a], goal, len(S_to_grid))
         return P
     
     def get_v(self, S_to_grid, init_dist):

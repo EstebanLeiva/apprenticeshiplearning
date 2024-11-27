@@ -16,7 +16,7 @@ def plot_gridworld(grid, obstacles, goal):
             else:
                 color = 'white'
 
-            rect = plt.Rectangle((j, i), 1, 1, facecolor=color, edgecolor='black')
+            rect = plt.Rectangle((i, j), 1, 1, facecolor=color, edgecolor='black')
             ax.add_patch(rect)
 
     ax.set_xlim(0, cols)
@@ -55,16 +55,16 @@ def plot_policy(grid, policy, obstacles, goal):
             else:
                 color = 'white'
 
-            rect = plt.Rectangle((j, i), 1, 1, facecolor=color, edgecolor='black')
+            rect = plt.Rectangle((i, j), 1, 1, facecolor=color, edgecolor='black')
             ax.add_patch(rect)
-            if policy[j, i] == 0:
-                plt.arrow(j + 0.5, i + 0.5, 0, 0.2, head_width=0.2, head_length=0.2, fc='k', ec='k')
-            elif policy[j, i] == 1:
-                plt.arrow(j + 0.5, i + 0.5, 0, -0.2, head_width=0.2, head_length=0.2, fc='k', ec='k')
-            elif policy[j, i] == 2:
-                plt.arrow(j + 0.5, i + 0.5, -0.2, 0, head_width=0.2, head_length=0.2, fc='k', ec='k')
-            elif policy[j, i] == 3:
-                plt.arrow(j + 0.5, i + 0.5, 0.2, 0, head_width=0.2, head_length=0.2, fc='k', ec='k')
+            if policy[i, j] == 0:
+                plt.arrow(i + 0.5, j + 0.5, 0, 0.2, head_width=0.2, head_length=0.2, fc='k', ec='k')
+            elif policy[i, j] == 1:
+                plt.arrow(i + 0.5, j + 0.5, 0, -0.2, head_width=0.2, head_length=0.2, fc='k', ec='k')
+            elif policy[i, j] == 2:
+                plt.arrow(i + 0.5, j + 0.5, -0.2, 0, head_width=0.2, head_length=0.2, fc='k', ec='k')
+            elif policy[i, j] == 3:
+                plt.arrow(i + 0.5, j + 0.5, 0.2, 0, head_width=0.2, head_length=0.2, fc='k', ec='k')
 
     ax.set_xlim(0, cols)
     ax.set_ylim(0, rows)
