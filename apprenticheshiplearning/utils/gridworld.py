@@ -35,9 +35,10 @@ def plot_occupation(grid):
     plt.show()
 
 def plot_cost_function(grid):
+    grid = grid.T
     cmap = mcolors.ListedColormap(['green', 'red'])
-    norm = mcolors.BoundaryNorm(boundaries=[-np.max(np.abs(grid)), 0, np.max(np.abs(grid))], ncolors=2)
-    alpha = np.clip(np.abs(grid) / np.max(np.abs(grid)), 0.1, 1)
+    norm = mcolors.BoundaryNorm(boundaries=[-1, 0, 1], ncolors=2)
+    alpha = np.abs(grid)
     plt.matshow(grid, cmap=cmap, norm=norm, alpha=alpha)
     plt.gca().invert_yaxis()
     plt.show()
