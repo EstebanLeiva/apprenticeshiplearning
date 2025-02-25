@@ -34,13 +34,15 @@ def plot_occupation(grid):
     plt.gca().invert_yaxis()
     plt.show()
 
-def plot_cost_function(grid):
+def plot_cost_function(grid, show_colorbar=False):
     grid = grid.T
     cmap = mcolors.ListedColormap(['green', 'red'])
     norm = mcolors.BoundaryNorm(boundaries=[-1, 0, 1], ncolors=2)
     alpha = np.abs(grid)
-    plt.matshow(grid, cmap=cmap, norm=norm, alpha=alpha)
+    im = plt.matshow(grid, cmap=cmap, norm=norm, alpha=alpha)
     plt.gca().invert_yaxis()
+    if show_colorbar:
+        cbar = plt.colorbar(im, ticks=[-0.5, 0.5])
     plt.show()
 
 def plot_policy(grid, policy, obstacles, goal):
