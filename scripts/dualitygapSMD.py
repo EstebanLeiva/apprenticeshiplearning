@@ -207,7 +207,7 @@ def get_step_size(S, A, gamma, alpha, epsilon):
     return eta_cu, eta_mu
 
 # %%
-alpha = 0.9
+alpha = 0
 mu_e = mu_expert
 c_0 = np.zeros(n**2 * len(actions))
 u_0 = np.zeros(n**2)
@@ -217,7 +217,7 @@ T = 10000
 N = 20
 
 solver_smd = SolverSMD(gridworld, c_hat, alpha, mu_e, c_0, u_0, mu_0, 1e-2, 1e-2, T)
-c, u, mu = solver_smd.solve_expected(N, True)
+c, u, mu = solver_smd.solve_expected(N, graphics=True, graphics_gap=True)
 
 policy_e = gridworld.mdp_forward.get_policy_from_mu(mu)
 visualize_policy = np.zeros((n,n))

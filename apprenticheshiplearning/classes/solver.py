@@ -17,7 +17,7 @@ class Solver:
         pass
 
 class SolverMdp(Solver):
-    def solve(self):
+    def solve(self, iters=None):
         mu = cp.Variable(len(self.mdp.S) * len(self.mdp.A))
         objective = cp.Minimize(
                                 self.mdp.c @ mu
@@ -25,7 +25,12 @@ class SolverMdp(Solver):
         constraints = [mu >= 0,
                        (self.mdp.T @ mu) == self.mdp.v]
         problem = cp.Problem(objective, constraints)
-        problem.solve(cp.CLARABEL, verbose=True)
+    
+        solver_kwargs = {"verbose": True}
+        if iters is not None:
+            solver_kwargs["max_iter"] = iters
+
+        problem.solve(cp.CLARABEL, **solver_kwargs)
         return problem, mu
     
     def solve_dual(self):
@@ -71,7 +76,7 @@ class SolverSMD(Solver):
         self.u_iter = np.zeros(T)
         self.mu_iter = np.zeros(T)
     
-    def solve_expected(self, sims, graphics=False):
+    def solve_expected(self, sims, graphics=False, graphics_gap=False):
         cs = 0
         us = 0
         mus = 0
@@ -83,7 +88,7 @@ class SolverSMD(Solver):
             mu = np.random.rand(len(self.mu))
             mu = mu / np.sum(mu)
 
-            output = self.solve(c, u, mu, graphics)
+            output = self.solve(c, u, mu, graphics, graphics_gap)
             cs += (output[0])
             us += (output[1])
             mus += (output[2])
@@ -96,12 +101,13 @@ class SolverSMD(Solver):
             self.c_iter = self.c_iter / sims
             self.u_iter = self.u_iter / sims
             self.mu_iter = self.mu_iter / sims
-
+        
+        if graphics_gap:
             self.gaps = self.gaps / sims
 
         return cs/sims, us/sims, mus/sims
 
-    def solve(self, c, u, mu, graphics):
+    def solve(self, c, u, mu, graphics, graphics_gap):
         # Initialize the sum of the vectors
         self.cs = 0
         self.us = 0
@@ -123,16 +129,6 @@ class SolverSMD(Solver):
                 self.g_cs[t] += np.linalg.norm(g_c)
                 self.g_us[t] += np.linalg.norm(g_u)
                 self.g_mus[t] += np.linalg.norm(g_mu)
-
-                
-                if t % self.gap_step == 0:
-                    if t == 0:
-                        div = 1
-                    else:
-                        div = t
-                    maxi = self.solve_max_problem(self.cs/div, self.us/div, len(self.mdp.S), len(self.mdp.A), self.lagrangian_max, self.alpha, self.c_hat, self.mu_e, (1/(1-self.mdp.gamma)) * self.mdp.T)
-                    mini = self.solve_min_problem(self.mus/div, len(self.mdp.S), len(self.mdp.A), self.lagrangian_min, self.alpha, self.c_hat, self.mu_e, (1/(1-self.mdp.gamma)) *self.mdp.T)
-                    self.gaps[t // self.gap_step] += maxi - mini
                 
                 if t == 0:
                     self.c_iter_prev = self.cs / (t+1)
@@ -145,6 +141,16 @@ class SolverSMD(Solver):
                     self.c_iter_prev = self.cs / (t+1)
                     self.u_iter_prev = self.us / (t+1)
                     self.mu_iter_prev = self.mus / (t+1)
+
+            if graphics_gap: 
+                if t % self.gap_step == 0:
+                    if t == 0:
+                        div = 1
+                    else:
+                        div = t
+                    maxi = self.solve_max_problem(self.cs/div, self.us/div, len(self.mdp.S), len(self.mdp.A), self.lagrangian_max, self.alpha, self.c_hat, self.mu_e, (1/(1-self.mdp.gamma)) * self.mdp.T)
+                    mini = self.solve_min_problem(self.mus/div, len(self.mdp.S), len(self.mdp.A), self.lagrangian_min, self.alpha, self.c_hat, self.mu_e, (1/(1-self.mdp.gamma)) *self.mdp.T)
+                    self.gaps[t // self.gap_step] += maxi - mini
 
 
         return self.cs/self.T, self.us/self.T, self.mus/self.T
@@ -166,12 +172,12 @@ class SolverSMD(Solver):
         g_c = np.zeros(len(c))
         g_c[index_sa] = len(c) * 2 * self.alpha * (c[index_sa] - self.c_hat[index_sa])
         g_c[index_mu_t] = -1
-        g_c[index_mu_e] = (1 - self.alpha)
+        g_c[index_mu_e] = 1
         
         g_u = np.zeros(len(self.mdp.S)) 
-        g_u[s_t] = (1 / (1-self.mdp.gamma)) * 1
+        g_u[s_t] = (1 / (1-self.mdp.gamma))
         g_u[s_prime_t] = - (1 / (1-self.mdp.gamma)) * self.mdp.gamma
-        g_u[s_e] = - (1 / (1-self.mdp.gamma)) * (1 - self.alpha)
+        g_u[s_e] = - (1 / (1-self.mdp.gamma))
         g_u[s_prime_e] = (1 / (1-self.mdp.gamma)) * self.mdp.gamma
 
         # mu gradient estimation
