@@ -1,6 +1,5 @@
 import numpy as np
-import itertools
-from apprenticheshiplearning.classes.mdp import Mdp, MdpIRL
+from apprenticheshiplearning.classes.mdp import Mdp
 
 class GridWorld:
 

@@ -351,3 +351,238 @@ class SolverApp(Solver):
         problem = cp.Problem(objective, constraints)
         problem.solve(cp.CLARABEL, verbose=True)
         return problem, c, u
+    
+class SolverConvexHull(Solver):
+    def __init__(self, gridworld, C_mat, mu_e, w_0, u_0, mu_0, eta_wu, eta_mu, T, gap_step=25):
+        super().__init__(gridworld.mdp_forward, [], mu_e)
+        self.C_mat = C_mat
+        self.w = w_0
+        self.u = u_0
+        self.mu = mu_0
+        self.eta_wu = eta_wu
+        self.eta_mu = eta_mu
+        self.T = T
+        self.cs = 0
+        self.us = 0
+        self.mus = 0
+        self.gamma = self.mdp.gamma
+        self.get_state_action = gridworld.get_state_action
+
+        # Graphing information
+        self.g_ws = np.zeros(T)
+        self.g_us = np.zeros(T)
+        self.g_mus = np.zeros(T)
+        
+        self.gap_step = gap_step
+        self.gaps = np.zeros(T//gap_step)
+        self.gaps_index = [i for i in range(0, T, gap_step)]
+
+        self.w_iter_prev = None
+        self.u_iter_prev = None
+        self.mu_iter_prev = None
+
+        self.w_iter = np.zeros(T)
+        self.u_iter = np.zeros(T)
+        self.mu_iter = np.zeros(T)
+    
+    def solve_expected(self, sims, graphics=False, graphics_gap=False):
+        ws = 0
+        us = 0
+        mus = 0
+
+        for sim in range(sims):
+            print(f"Simulation {sim+1}/{sims}")
+            w = np.random.rand(len(self.w))
+            w = w / np.sum(w)
+            u = np.random.uniform(-1, 1, len(self.u))
+            mu = np.random.rand(len(self.mu))
+            mu = mu / np.sum(mu)
+
+            output = self.solve(w, u, mu, graphics, graphics_gap)
+            ws += (output[0])
+            us += (output[1])
+            mus += (output[2])
+
+        if graphics:
+            self.g_ws = self.g_ws / sims
+            self.g_us = self.g_us / sims
+            self.g_mus = self.g_mus / sims
+
+            self.w_iter = self.w_iter / sims
+            self.u_iter = self.u_iter / sims
+            self.mu_iter = self.mu_iter / sims
+        
+        if graphics_gap:
+            self.gaps = self.gaps / sims
+
+        return ws/sims, us/sims, mus/sims
+
+    def solve(self, w, u, mu, graphics, graphics_gap):
+        # Initialize the sum of the vectors
+        self.ws = 0
+        self.us = 0
+        self.mus = 0
+
+        self.w = w
+        self.u = u
+        self.mu = mu
+
+        for t in range(self.T):
+            g_w, g_u, g_mu = self.gradient_estimation(self.w, self.u, self.mu, self.mu_e)
+
+            self.w, self.u, self.mu = self.smd_step(self.w, self.u, self.mu, g_w, g_u, g_mu)
+            self.ws += (self.w)
+            self.us += (self.u)
+            self.mus += (self.mu)
+
+            if graphics:
+                self.g_ws[t] += np.linalg.norm(g_w)
+                self.g_us[t] += np.linalg.norm(g_u)
+                self.g_mus[t] += np.linalg.norm(g_mu)
+                
+                if t == 0:
+                    self.w_iter_prev = self.ws / (t+1)
+                    self.u_iter_prev = self.us / (t+1)
+                    self.mu_iter_prev = self.mus / (t+1)
+                else:
+                    self.w_iter[t] += np.linalg.norm(self.w_iter_prev - self.ws / (t+1), ord=1)
+                    self.u_iter[t] += np.linalg.norm(self.u_iter_prev - self.us / (t+1), ord=1)
+                    self.mu_iter[t] += np.linalg.norm(self.mu_iter_prev - self.mus / (t+1), ord=1)
+                    self.w_iter_prev = self.ws / (t+1)
+                    self.u_iter_prev = self.us / (t+1)
+                    self.mu_iter_prev = self.mus / (t+1)
+
+            if graphics_gap: 
+                if t % self.gap_step == 0:
+                    if t == 0:
+                        div = 1
+                    else:
+                        div = t
+                    maxi = self.solve_max_problem(self.ws/div, self.us/div, len(self.mdp.S), len(self.mdp.A), self.lagrangian_max, self.mu_e, (1/(1-self.mdp.gamma)) * self.mdp.T)
+                    mini = self.solve_min_problem(self.mus/div, len(self.mdp.S), len(self.mdp.A), self.lagrangian_min, self.mu_e, (1/(1-self.mdp.gamma)) *self.mdp.T)
+                    self.gaps[t // self.gap_step] += maxi - mini
+
+
+        return self.ws/self.T, self.us/self.T, self.mus/self.T
+    
+    def gradient_estimation(self, w, u, mu, mu_e):
+        # (w,u) gradient estimation
+        index_mu_t = np.random.choice(len(mu), p=mu)
+        s_t, a_t = self.get_state_action(index_mu_t)
+        s_prime_t = np.random.choice(len(self.mdp.P[:, s_t, a_t]), p=self.mdp.P[:, s_t, a_t])
+        
+        index_mu_e = np.random.choice(len(mu_e), p=mu_e)
+        s_e, a_e = self.get_state_action(index_mu_e)
+        s_prime_e = np.random.choice(len(self.mdp.P[:, s_e, a_e]), p=self.mdp.P[:, s_e, a_e])
+
+        g_w = np.zeros(len(w))
+        g_w = self.C_mat[index_mu_e, :] - self.C_mat[index_mu_t, :] 
+        
+        g_u = np.zeros(len(self.mdp.S)) 
+        g_u[s_t] = (1 / (1-self.mdp.gamma))
+        g_u[s_prime_t] = - (1 / (1-self.mdp.gamma)) * self.mdp.gamma
+        g_u[s_e] = - (1 / (1-self.mdp.gamma))
+        g_u[s_prime_e] = (1 / (1-self.mdp.gamma)) * self.mdp.gamma
+
+        # mu gradient estimation
+        index_sa = np.random.choice(len(mu))
+        s, a = self.get_state_action(index_sa)
+        s_prime = np.random.choice(len(self.mdp.P[:, s, a]), p=self.mdp.P[:, s, a])
+        
+        g_mu = np.zeros(len(mu))
+        g_mu[index_sa] = len(mu) * ( (self.C_mat@w)[index_sa] - (1 / (1 - self.gamma)) * (u[s] - self.gamma * u[s_prime]) )
+
+        return g_w, g_u, g_mu
+    
+    def smd_step(self, w, u, mu, g_w, g_u, g_mu):
+        w_prime = self.proj_simplex(w * np.exp(-self.eta_wu * g_w))
+        u_prime = self.proj_box(u - self.eta_wu * g_u)
+        mu_prime = self.proj_simplex(mu * np.exp(-self.eta_mu * g_mu))
+        return w_prime, u_prime, mu_prime
+    
+    def proj_simplex(self, x):
+        return x / np.linalg.norm(x, ord=1)
+    
+    def proj_box(self, x):
+        return np.clip(x, -1, 1) 
+    
+    def avg_vec(self, vec_lst):
+        total_sum = np.sum(vec_lst, axis=0)
+        return total_sum / len(vec_lst)
+    
+    def lagrangian_max(self, model, w_e, u_e, n_s, mu_expert, T):
+        Tt = np.transpose(T)
+        dot_term = 0.0
+        for s in model.S:
+            for a in model.A:
+                Ttu_sa = pyo.quicksum(Tt[s + a * n_s, s] * u_e[s] for s in model.S)
+                reward_part = pyo.quicksum(self.C[s + a * n_s, f] * w_e[f] for f in model.F)
+                term_diff = (mu_expert[s + a * n_s] - model.mu[s, a])
+                dot_term += term_diff * (reward_part - Ttu_sa)
+        return dot_term
+
+    def lagrangian_min(self, model, mu_e, n_s, mu_expert, T):
+        Tt = np.transpose(T)
+        dot_term = 0.0
+        for s in model.S:
+            for a in model.A:
+                Ttu_sa = pyo.quicksum(Tt[s + a * n_s, s] * model.u[s] for s in model.S)
+                reward_sa = pyo.quicksum(self.C[s + a * n_s , f] * model.w[f] for f in model.F)
+                term_diff = (mu_expert[s + a * n_s] - mu_e[s + a * n_s ])
+                dot_term += term_diff * (reward_sa - Ttu_sa)
+        return dot_term
+
+    def solve_max_problem(self, c_e, u_e, n_s, n_a, lagrangian, mu_expert, T):
+        model = pyo.ConcreteModel()
+
+        model.S = pyo.RangeSet(0, n_s - 1)
+        model.A = pyo.RangeSet(0, n_a - 1)
+
+        model.mu = pyo.Var(model.S, model.A, within=pyo.NonNegativeReals)
+
+        def mu_simplex_rule(m):
+            return sum(m.mu[s, a] for a in m.A for s in m.S) == 1
+        
+        model.mu_sum_constraint = pyo.Constraint(rule=mu_simplex_rule)
+
+        def objective(m):
+            return lagrangian(m, c_e, u_e, n_s, mu_expert, T)
+
+        model.obj = pyo.Objective(rule=objective, sense=pyo.maximize)
+
+        solver = pyo.SolverFactory('ipopt')
+        solver.solve(model, tee=False)
+        opt_val = pyo.value(model.obj)
+
+        return opt_val
+
+    def solve_min_problem(self, mu_e, n_s, n_a, lagrangian, mu_expert, T):
+        model = pyo.ConcreteModel()
+        
+        model.S = pyo.RangeSet(0, n_s - 1)
+        model.A = pyo.RangeSet(0, n_a - 1)
+        model.F = pyo.RangeSet(0, self.C_mat.shape[1] - 1)  # Assuming C_mat has shape (num_sa, num_features)
+        
+        model.w = pyo.Var(model.F, within=pyo.Reals)
+        model.u = pyo.Var(model.S, within=pyo.Reals)
+        
+        def w_simplex_rule_leq(m):
+            return sum(m.w[f] for f in m.F) == 1
+        model.w_sum_constraint = pyo.Constraint(rule=w_simplex_rule_leq)
+        
+        def u_box_rule_leq(m, s):
+            return m.u[s] <= 1
+        def u_box_rule_geq(m, s):
+            return m.u[s] >= -1
+        model.u_box_lower = pyo.Constraint(model.S, rule=u_box_rule_leq)
+        model.u_box_upper = pyo.Constraint(model.S, rule=u_box_rule_geq)
+        
+        def objective(m):
+            return lagrangian(m, mu_e, n_s, mu_expert, T)
+        model.obj = pyo.Objective(rule=objective, sense=pyo.minimize)
+        
+        solver = pyo.SolverFactory('Ipopt')
+        solver.solve(model, tee=False)
+        c_opt_value = pyo.value(model.obj)
+        
+        return c_opt_value
