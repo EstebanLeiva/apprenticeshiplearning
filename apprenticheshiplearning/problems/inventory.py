@@ -4,13 +4,25 @@ from apprenticheshiplearning.classes.mdp import Mdp
 
 class Inventory:
     
-    def __init__(self, max_inventory, demand_lambda, sell_price, holding_cost, order_cost, gamma, expert_occupancy_measure=None, c_estimate=None):
+    def __init__(self, 
+                 max_inventory, 
+                 demand_lambda, 
+                 sell_price, 
+                 holding_cost, 
+                 order_cost, 
+                 gamma,
+                 min_scaling = None,
+                 max_scaling = None,
+                 expert_occupancy_measure=None, 
+                 c_estimate=None):
         self.max_inventory = max_inventory
         self.demand_lambda = demand_lambda
         self.sell_price = sell_price
         self.holding_cost = holding_cost
         self.order_cost = order_cost
         self.gamma = gamma
+        self.min_scaling = min_scaling
+        self.max_scaling = max_scaling
         self.expert_occupancy_measure = expert_occupancy_measure
         self.c_estimate = c_estimate
 
@@ -115,13 +127,13 @@ class Inventory:
             for a in A:
                 c[s + len(S) * a] = self.cost(s, a)
 
-        #normalize the cost between -1 and 1
-        c_min = np.min(c)
-        c_max = np.max(c)
-
-        print("Cost range: ", c_min, c_max)
-        
-        c = 2 * ((c - c_min) / (c_max - c_min)) - 1
+        if self.min_scaling == None or self.max_scaling == None:
+            c_min = np.min(c)
+            c_max = np.max(c)
+            print("Cost range: ", c_min, c_max)
+            c = 2 * ((c - c_min) / (c_max - c_min)) - 1
+        else:
+            c = 2 * ((c - self.min_scaling) / (self.max_scaling - self.min_scaling)) - 1
         
         return c
     
